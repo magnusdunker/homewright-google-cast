@@ -1,0 +1,10 @@
+{
+  "domain": "google_cast",
+  "name": "Google Cast",
+  "plugin_api": 1,
+  "config_flow": true,
+  "single_instance": true,
+  "iot_class": "local_push",
+  "discovery": { "zeroconf": ["_googlecast._tcp.local."] },
+  "documentation": "https://github.com/magnusdunker/thehome-google-cast"
+}
