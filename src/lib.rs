@@ -367,6 +367,9 @@ impl Runtime {
             if k.manual && !manual {
                 return;
             }
+            if !replaces(&k.info.host, &c.host) {
+                return;
+            }
             if (k.info.host.as_str(), k.info.port) != (c.host.as_str(), c.port) {
                 info!("{}: ny adresse {}:{}", k.info.name, c.host, c.port);
                 k.info.host = c.host.clone();
@@ -447,6 +450,13 @@ impl Runtime {
     }
 }
 
+/// Whether a newly seen address should replace the current one. mDNS can
+/// resolve the AAAA record before the A record, so IPv6 never replaces IPv4.
+fn replaces(current: &str, new: &str) -> bool {
+    let is_v6 = |h: &str| h.parse::<std::net::IpAddr>().is_ok_and(|a| a.is_ipv6());
+    !(is_v6(new) && !is_v6(current))
+}
+
 /// A device at an address the user typed: its identity from eureka_info,
 /// or from the address when that page is not there but Cast answers.
 async fn probe(host: &str, port: u16) -> Option<CastInfo> {
@@ -467,5 +477,27 @@ async fn probe(host: &str, port: u16) -> Option<CastInfo> {
             info!("{host}:{port}: {e}");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ipv4_wins() {
+        assert!(replaces("2a09::1", "192.168.0.164"));
+        assert!(replaces("192.168.0.164", "192.168.0.165"));
+        assert!(!replaces("192.168.0.164", "2a09::1"));
+        assert!(replaces("fe80::1", "2a09::1"));
+    }
+
+    #[test]
+    fn form_values() {
+        assert_eq!(str_list(&json!("10.0.0.1, tv.lan:8010\n10.0.0.2")), ["10.0.0.1", "tv.lan:8010", "10.0.0.2"]);
+        assert_eq!(str_list(&json!(["a", 1, "b"])), ["a", "b"]);
+        assert_eq!(parse_hosts(&json!("10.0.0.1, x:y")), Err("x:y".to_string()));
+        let found = vec![CastInfo { uuid: "u".into(), name: "Stue".into(), model: Some("Chromecast".into()), manufacturer: None, host: "10.0.0.9".into(), port: 8009 }];
+        assert_eq!(stored(&Map::from_iter([("found".to_string(), store(&found))])), found);
     }
 }
