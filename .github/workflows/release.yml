@@ -49,16 +49,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
       # A release published on github.com already exists; then only add the files.
       - run: |
+          # release notes: the commit subjects since the previous tag
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          {
+            if [ -n "$prev" ]; then echo "## Ændringer siden $prev"; else echo "## Ændringer"; fi
+            echo
+            git log --no-merges --format='- %s' ${prev:+$prev..}"$GITHUB_REF_NAME"
+          } > notes.md
+          cat notes.md
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/* thehome.json --clobber
+            # keep notes written on github.com, fill in an empty release
+            if [ -z "$(gh release view "$GITHUB_REF_NAME" --json body -q .body)" ]; then
+              gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+            fi
           else
-            gh release create "$GITHUB_REF_NAME" dist/* thehome.json --title "$GITHUB_REF_NAME" --generate-notes
+            gh release create "$GITHUB_REF_NAME" dist/* thehome.json --title "$GITHUB_REF_NAME" --notes-file notes.md
           fi
         env:
           GH_TOKEN: ${{ github.token }}
