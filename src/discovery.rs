@@ -61,18 +61,37 @@ pub fn browse(found: tokio::sync::mpsc::UnboundedSender<CastInfo>) -> Option<mdn
             return None;
         }
     };
+    forward(rx, found);
+    Some(daemon)
+}
+
+/// Ask again: a new query, and the records mDNS already has come again.
+/// Devices that missed the first query, or answer only now and then, turn
+/// up this way.
+pub fn rebrowse(daemon: &mdns_sd::ServiceDaemon, found: tokio::sync::mpsc::UnboundedSender<CastInfo>) {
+    let _ = daemon.stop_browse(SERVICE);
+    match daemon.browse(SERVICE) {
+        Ok(rx) => forward(rx, found),
+        Err(e) => crate::warn!("mDNS-søgning fejlede: {e}"),
+    }
+}
+
+fn forward(rx: mdns_sd::Receiver<mdns_sd::ServiceEvent>, found: tokio::sync::mpsc::UnboundedSender<CastInfo>) {
     tokio::spawn(async move {
         while let Ok(ev) = rx.recv_async().await {
-            if let mdns_sd::ServiceEvent::ServiceResolved(info) = ev {
-                if let Some(c) = from_service(&info) {
-                    if found.send(c).is_err() {
-                        break;
+            match ev {
+                mdns_sd::ServiceEvent::ServiceResolved(info) => {
+                    if let Some(c) = from_service(&info) {
+                        if found.send(c).is_err() {
+                            break;
+                        }
                     }
                 }
+                mdns_sd::ServiceEvent::SearchStopped(_) => break,
+                _ => {}
             }
         }
     });
-    Some(daemon)
 }
 
 fn from_service(info: &mdns_sd::ServiceInfo) -> Option<CastInfo> {

@@ -55,6 +55,8 @@ Er `media_content_type` ikke en MIME-type, gættes den ud fra URL'ens endelse. T
 
 Integrationen holder en forbindelse åben til hver enhed, og enhederne sender selv deres tilstand, når den ændrer sig. Mistes forbindelsen, bliver afspilleren utilgængelig, og integrationen forbinder igen efter 1 sekund og derefter med længere pauser op til 30 sekunder. Skifter enheden IP-adresse, opdager mDNS det.
 
+Integrationen husker den adresse, mDNS sidst gav hver enhed, og forbinder til den ved opstart. Så kommer en enhed med, selvom den ikke svarer på mDNS, når TheHome starter. Den spørger også på mDNS igen hvert 5. minut, så en enhed, der først svarer senere, bliver fundet.
+
 ## Udvikling
 
 Bygget i Rust på SDK'en `thehome-plugin` fra [thehome-example-integration-rust](https://github.com/magnusdunker/thehome-example-integration-rust).

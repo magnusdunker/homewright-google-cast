@@ -212,3 +212,23 @@ async fn controls_a_device() {
     let e = service(&host, &id, "media_play", json!({})).await.unwrap_err();
     assert_eq!(e["data"]["kind"], "unavailable");
 }
+
+#[tokio::test]
+async fn connects_to_a_remembered_address_without_mdns() {
+    let cast = FakeCast::start().await;
+    let host = start().await;
+    let uuid = "bb".repeat(16);
+    let dir = std::env::temp_dir().join(format!("google-cast-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let saved = json!([{ "uuid": uuid, "name": "Soveværelse", "model": "Chromecast", "manufacturer": "Google", "host": "127.0.0.1", "port": cast.port }]);
+    std::fs::write(dir.join("devices-e-remember.json"), saved.to_string()).unwrap();
+
+    // mDNS is off and no address is typed in: only the remembered one is left
+    let entry = json!({ "entry_id": "e-remember", "domain": "google_cast", "data": { "mdns": false }, "options": {} });
+    host.call("setup_entry", json!({ "entry": entry })).await.unwrap();
+    let (state, _) = wait_for("tilstand", || host.state_of(&uuid)).await;
+    assert_eq!(state, "off");
+    let rec = host.rec.lock().unwrap();
+    assert_eq!(rec.devices[0]["name"], "Soveværelse");
+    assert_eq!(rec.devices[0]["model"], "Chromecast");
+}

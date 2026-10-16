@@ -1,6 +1,6 @@
 [package]
 name = "thehome-google-cast"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "Chromecast, Google-højttalere og andre Cast-enheder som ekstern integration til TheHome"

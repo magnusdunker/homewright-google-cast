@@ -3,7 +3,9 @@
 //!
 //! One setup covers every cast device on the network. Devices are found
 //! with mDNS while the setup runs, plus any addresses the user typed for
-//! devices mDNS cannot reach. Each device gets a persistent Cast v2
+//! devices mDNS cannot reach. The addresses found are remembered, so a
+//! device that does not answer mDNS after a restart is still connected to.
+//! Each device gets a persistent Cast v2
 //! connection that pushes its state to TheHome when it changes.
 
 pub mod conn;
@@ -25,6 +27,18 @@ pub const DOMAIN: &str = "google_cast";
 const SCAN: Duration = Duration::from_secs(4);
 /// How often an address the user typed is tried while the device is away.
 const MANUAL_RETRY: Duration = Duration::from_secs(30);
+/// How often mDNS is asked again.
+const REBROWSE: Duration = Duration::from_secs(300);
+
+/// Where a device was found.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Source {
+    Mdns,
+    /// An address the user typed.
+    Manual,
+    /// The address mDNS gave last time.
+    Remembered,
+}
 
 /// Logging to TheHome's log through stderr.
 #[doc(hidden)]
@@ -73,7 +87,7 @@ fn schema(found: &[CastInfo], selected: &[String], known_hosts: &str) -> Value {
 
 /// Found devices kept in the flow's data between steps.
 fn store(found: &[CastInfo]) -> Value {
-    found.iter().map(|c| json!({ "uuid": c.uuid, "name": c.name, "model": c.model, "host": c.host, "port": c.port })).collect()
+    found.iter().map(|c| json!({ "uuid": c.uuid, "name": c.name, "model": c.model, "manufacturer": c.manufacturer, "host": c.host, "port": c.port })).collect()
 }
 
 fn stored(data: &Map<String, Value>) -> Vec<CastInfo> {
@@ -84,7 +98,7 @@ fn stored(data: &Map<String, Value>) -> Vec<CastInfo> {
                 uuid: c["uuid"].as_str()?.into(),
                 name: c["name"].as_str()?.into(),
                 model: c["model"].as_str().map(String::from),
-                manufacturer: None,
+                manufacturer: c["manufacturer"].as_str().map(String::from),
                 host: c["host"].as_str().unwrap_or_default().into(),
                 port: c["port"].as_u64().and_then(|p| u16::try_from(p).ok()).unwrap_or(8009),
             })
@@ -304,15 +318,28 @@ impl Runtime {
             daemon: Default::default(),
         });
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(CastInfo, bool)>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(CastInfo, Source)>();
+        // first, so mDNS finds them known and only moves them if they moved
+        for c in remembered(&rt.memory_file()) {
+            let _ = tx.send((c, Source::Remembered));
+        }
         if entry.get("mdns") != Some(&json!(false)) {
             let (mtx, mut mrx) = tokio::sync::mpsc::unbounded_channel();
-            *rt.daemon.lock().unwrap() = discovery::browse(mtx);
+            *rt.daemon.lock().unwrap() = discovery::browse(mtx.clone());
             let tx = tx.clone();
             rt.tasks.lock().unwrap().push(tokio::spawn(async move {
                 while let Some(c) = mrx.recv().await {
-                    if tx.send((c, false)).is_err() {
+                    if tx.send((c, Source::Mdns)).is_err() {
                         break;
+                    }
+                }
+            }));
+            let me = rt.clone();
+            rt.tasks.lock().unwrap().push(tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(REBROWSE).await;
+                    if let Some(d) = me.daemon.lock().unwrap().as_ref() {
+                        discovery::rebrowse(d, mtx.clone());
                     }
                 }
             }));
@@ -322,7 +349,7 @@ impl Runtime {
             rt.tasks.lock().unwrap().push(tokio::spawn(async move {
                 loop {
                     if let Some(c) = probe(&h, p).await {
-                        let _ = tx.send((c, true));
+                        let _ = tx.send((c, Source::Manual));
                         break;
                     }
                     tokio::time::sleep(MANUAL_RETRY).await;
@@ -332,8 +359,8 @@ impl Runtime {
         drop(tx);
         let me = rt.clone();
         rt.tasks.lock().unwrap().push(tokio::spawn(async move {
-            while let Some((c, manual)) = rx.recv().await {
-                me.on_found(c, manual).await;
+            while let Some((c, source)) = rx.recv().await {
+                me.on_found(c, source).await;
             }
         }));
         rt
@@ -352,7 +379,28 @@ impl Runtime {
         }
     }
 
-    async fn on_found(&self, mut c: CastInfo, manual: bool) {
+    fn memory_file(&self) -> std::path::PathBuf {
+        self.host.data_dir().join(format!("devices-{}.json", self.entry_id))
+    }
+
+    /// Write down where the devices mDNS found are.
+    fn remember(&self, devices: &HashMap<String, Known>) {
+        let mut found: Vec<CastInfo> = devices.values().filter(|k| !k.manual).map(|k| k.info.clone()).collect();
+        found.sort_by(|a, b| a.uuid.cmp(&b.uuid));
+        let path = self.memory_file();
+        let write = || -> std::io::Result<()> {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(&path, serde_json::to_vec_pretty(&store(&found))?)
+        };
+        if let Err(e) = write() {
+            warn!("kan ikke gemme enhedernes adresser i {}: {e}", path.display());
+        }
+    }
+
+    async fn on_found(&self, mut c: CastInfo, source: Source) {
+        let manual = source == Source::Manual;
         if !manual {
             // an address the user typed wins over mDNS for the same device
             if self.manual.iter().any(|(h, p)| *h == c.host && *p == c.port) {
@@ -364,7 +412,7 @@ impl Runtime {
         }
         let mut devices = self.devices.lock().await;
         if let Some(k) = devices.get_mut(&c.uuid) {
-            if k.manual && !manual {
+            if (k.manual && !manual) || source == Source::Remembered {
                 return;
             }
             if !replaces(&k.info.host, &c.host) {
@@ -377,10 +425,11 @@ impl Runtime {
                 if let Some(h) = &k.handle {
                     h.set_addr((c.host, c.port));
                 }
+                self.remember(&devices);
             }
             return;
         }
-        if !manual {
+        if source == Source::Mdns {
             if let Some((_, v)) = discovery::eureka(&c.host).await {
                 let name = c.name.clone();
                 discovery::apply_eureka(&mut c, &v);
@@ -388,7 +437,8 @@ impl Runtime {
                 c.name = name;
             }
         }
-        info!("fandt {} ({}) på {}:{}", c.name, c.model.as_deref().unwrap_or("ukendt model"), c.host, c.port);
+        let how = if source == Source::Remembered { "husker" } else { "fandt" };
+        info!("{how} {} ({}) på {}:{}", c.name, c.model.as_deref().unwrap_or("ukendt model"), c.host, c.port);
         let dev = Device {
             identifiers: vec![(DOMAIN.into(), c.uuid.clone())],
             name: c.name.clone(),
@@ -409,6 +459,9 @@ impl Runtime {
             Err(e) => warn!("{}: {e}", c.name),
         }
         devices.insert(c.uuid.clone(), known);
+        if source == Source::Mdns {
+            self.remember(&devices);
+        }
     }
 
     async fn call(&self, entity_id: &str, service: &str, data: Map<String, Value>) -> Result<(), Error> {
@@ -448,6 +501,13 @@ impl Runtime {
         }
         out
     }
+}
+
+/// The devices written down last time.
+fn remembered(path: &std::path::Path) -> Vec<CastInfo> {
+    let Ok(bytes) = std::fs::read(path) else { return vec![] };
+    let list: Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    stored(&Map::from_iter([("found".to_string(), list)]))
 }
 
 /// Whether a newly seen address should replace the current one. mDNS can
