@@ -1,4 +1,4 @@
-//! The plugin driven over a pipe the way TheHome drives it, against a fake
+//! The plugin driven over a pipe the way HomewrightHQ drives it, against a fake
 //! cast device on localhost.
 
 mod fake;

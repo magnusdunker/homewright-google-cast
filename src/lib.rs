@@ -1,12 +1,12 @@
 //! Google Cast: Chromecasts, Google and Nest speakers and displays, Android
-//! TVs and cast groups as media players in TheHome. An external integration.
+//! TVs and cast groups as media players in HomewrightHQ. An external integration.
 //!
 //! One setup covers every cast device on the network. Devices are found
 //! with mDNS while the setup runs, plus any addresses the user typed for
 //! devices mDNS cannot reach. The addresses found are remembered, so a
 //! device that does not answer mDNS after a restart is still connected to.
 //! Each device gets a persistent Cast v2
-//! connection that pushes its state to TheHome when it changes.
+//! connection that pushes its state to HomewrightHQ when it changes.
 
 pub mod conn;
 pub mod device;
@@ -40,7 +40,7 @@ enum Source {
     Remembered,
 }
 
-/// Logging to TheHome's log through stderr.
+/// Logging to HomewrightHQ's log through stderr.
 #[doc(hidden)]
 pub fn emit(level: &str, message: String) {
     thehome_plugin::log(level, message);

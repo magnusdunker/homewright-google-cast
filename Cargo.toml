@@ -3,7 +3,7 @@ name = "thehome-google-cast"
 version = "0.1.2"
 edition = "2021"
 license = "MIT"
-description = "Chromecast, Google-højttalere og andre Cast-enheder som ekstern integration til TheHome"
+description = "Chromecast, Google-højttalere og andre Cast-enheder som ekstern integration til HomewrightHQ"
 publish = false
 
 [[bin]]
@@ -11,7 +11,7 @@ name = "google_cast"
 path = "src/main.rs"
 
 [dependencies]
-thehome-plugin = { git = "https://github.com/magnusdunker/thehome-example-integration-rust", rev = "a8f05c1859f6689b2a31d2188593eb872408385e" }
+thehome-plugin = { git = "https://github.com/magnusdunker/homewrighthq-example-integration-rust", rev = "a8f05c1859f6689b2a31d2188593eb872408385e" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net", "io-util"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

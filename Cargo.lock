@@ -670,7 +670,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror",
  "tokio",
  "tracing",
@@ -708,9 +708,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1054,7 +1054,7 @@ dependencies = [
 [[package]]
 name = "thehome-plugin"
 version = "0.1.0"
-source = "git+https://github.com/magnusdunker/thehome-example-integration-rust?rev=a8f05c1859f6689b2a31d2188593eb872408385e#a8f05c1859f6689b2a31d2188593eb872408385e"
+source = "git+https://github.com/magnusdunker/homewrighthq-example-integration-rust?rev=a8f05c1859f6689b2a31d2188593eb872408385e#a8f05c1859f6689b2a31d2188593eb872408385e"
 dependencies = [
  "async-trait",
  "serde",

@@ -1,5 +1,5 @@
 //! One cast device: a persistent connection that reconnects with backoff,
-//! keeps the receiver and media status, pushes state to TheHome when it
+//! keeps the receiver and media status, pushes state to HomewrightHQ when it
 //! changes, and carries out service calls.
 
 use std::collections::HashMap;
@@ -91,7 +91,7 @@ impl Caller {
     }
 }
 
-/// What was last sent to TheHome, so unchanged states are not sent again.
+/// What was last sent to HomewrightHQ, so unchanged states are not sent again.
 #[derive(PartialEq)]
 enum Published {
     Nothing,
@@ -275,7 +275,7 @@ impl Session {
 
     async fn run(&mut self, cmds: &mut mpsc::UnboundedReceiver<Command>, addr: &mut watch::Receiver<(String, u16)>, out: &mut Out) -> End {
         let start = async {
-            self.send(RECEIVER, NS_CONNECTION, json!({ "type": "CONNECT", "userAgent": "TheHome" })).await?;
+            self.send(RECEIVER, NS_CONNECTION, json!({ "type": "CONNECT", "userAgent": "HomewrightHQ" })).await?;
             self.request(RECEIVER, NS_RECEIVER, json!({ "type": "GET_STATUS" })).await
         };
         if let Err(e) = start.await {
@@ -412,7 +412,7 @@ impl Session {
         self.media = None;
         self.transport = want.clone();
         if let Some(t) = want {
-            self.send(&t, NS_CONNECTION, json!({ "type": "CONNECT", "userAgent": "TheHome" })).await?;
+            self.send(&t, NS_CONNECTION, json!({ "type": "CONNECT", "userAgent": "HomewrightHQ" })).await?;
             self.request(&t, NS_MEDIA, json!({ "type": "GET_STATUS" })).await?;
         }
         Ok(())

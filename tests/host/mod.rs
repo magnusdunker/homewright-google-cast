@@ -1,5 +1,5 @@
-//! Plays TheHome over a pipe: answers the integration's requests the way
-//! TheHome does and records devices, entities, states and issues.
+//! Plays HomewrightHQ over a pipe: answers the integration's requests the way
+//! HomewrightHQ does and records devices, entities, states and issues.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -100,7 +100,7 @@ impl FakeHost {
     }
 }
 
-/// Entity ids the way TheHome builds them for a device's entities, roughly.
+/// Entity ids the way HomewrightHQ builds them for a device's entities, roughly.
 fn slug(s: &str) -> String {
     s.to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect()
 }

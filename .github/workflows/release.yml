@@ -1,5 +1,5 @@
 # Bygger en binær pr. platform, når et tag som v1.2.3 pushes, og lægger dem
-# sammen med thehome.json på en GitHub-release. TheHome installerer derfra.
+# sammen med thehome.json på en GitHub-release. HomewrightHQ installerer derfra.
 name: Release
 
 on:
